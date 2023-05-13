@@ -1,7 +1,10 @@
 import javax.swing.*;
 import java.awt.*;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -12,6 +15,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import org.json.*;
 
 import com.google.gson.*;
 
@@ -111,7 +116,9 @@ public class Win extends JFrame {
             }
         }
         for (String ele : countries) {
-            listButtons.add(new Button(ele));
+            Button tmp = new Button(ele);
+            tmp.addActionListener(e -> info(tmp.getLabel()));
+            listButtons.add(tmp);
         }
         for (Button button : listButtons) {
             rightPanel.add(button);
@@ -154,5 +161,129 @@ public class Win extends JFrame {
                 .limit(Long.parseLong(amount)).sorted().collect(Collectors.toList());
 
         return counteriesList;
+    }
+
+    public void info(String countryName) {
+
+        new Thread(() -> {
+            JDialog dialog = new JDialog();
+            JLabel label = new JLabel("Loading ...");
+            label.setHorizontalAlignment(JLabel.CENTER);
+            label.setFont(new Font("Arial", Font.ITALIC, 24));
+            dialog.add(label);
+            dialog.pack();
+            dialog.setSize(200, 100);
+            dialog.setLocationRelativeTo(null);
+            dialog.setVisible(true);
+            StringBuilder infoCountry = doLongJob(countryName);
+            dialog.dispose();
+            infoDialog(infoCountry);
+        }).start();
+
+    }
+
+    public StringBuilder doLongJob(String contryName) {
+        contryName = contryName.replace(" ", "%20");
+        String countryUrl = "https://restcountries.com/v3.1/name/" + contryName;
+        String inf = "";
+        try (
+                BufferedReader bufferedReader = new BufferedReader(
+                        new InputStreamReader(
+                                new URL(countryUrl).openConnection().getInputStream()
+                        )
+                )
+        ) {
+            inf = bufferedReader.lines().collect(Collectors.joining());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        StringBuilder stringBuilder = new StringBuilder();
+
+        JSONArray jsonArray = new JSONArray(inf);
+        JSONObject jsonObject = jsonArray.getJSONObject(0);
+
+        try {
+            JSONObject nameObject = jsonObject.getJSONObject("name");
+            stringBuilder.append("Official name: ").append(nameObject.getString("official")).append("\n");
+        } catch (Exception e) {
+            stringBuilder.append("No information about official name").append("\n");
+        }
+
+        fillCapitals("capital", jsonObject, stringBuilder);
+
+        try {
+            stringBuilder.append("Population: ").append(jsonObject.getLong("population")).append("\n");
+        } catch (Exception e) {
+            stringBuilder.append("No information about population").append("\n");
+        }
+
+        fillCurrencies("currencies", jsonObject, stringBuilder);
+
+        try {
+            stringBuilder.append("Subregion: ").append(jsonObject.get("subregion")).append("\n");
+        } catch (Exception e) {
+            stringBuilder.append("No information about subregion").append("\n");
+        }
+        fillLanguages("languages", jsonObject, stringBuilder);
+
+        return stringBuilder;
+    }
+
+    public void infoDialog(StringBuilder infoAboutCountry) {
+        JDialog dialog = new JDialog();
+        JTextArea jTextField = new JTextArea(infoAboutCountry.toString());
+        jTextField.setFont(new Font("Arial", Font.ITALIC, 24));
+        jTextField.setMargin(new Insets(10, 10, 10, 10));
+        jTextField.setEditable(false);
+        dialog.add(jTextField);
+        dialog.pack();
+        dialog.setLocationRelativeTo(null);
+        dialog.setVisible(true);
+        dialog.pack();
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+    }
+
+    public void fillCurrencies(String symbol, JSONObject jsonObject, StringBuilder stringBuilder) {
+        try {
+
+            JSONObject curObject = jsonObject.getJSONObject(symbol);
+            int i = 1;
+            for (String key : curObject.keySet()) {
+                JSONObject currencieObject = curObject.getJSONObject(key);
+                stringBuilder.append("Currencie name(").append(i).append("): ").append(currencieObject.getString("name")).append("\n");
+            }
+        } catch (Exception e) {
+            stringBuilder.append("No information about currency!").append("\n");
+        }
+    }
+
+    public void fillCapitals(String symbol, JSONObject jsonObject, StringBuilder stringBuilder) {
+        try {
+            JSONArray capitalObject = jsonObject.getJSONArray(symbol);
+            if (capitalObject.length() == 1) {
+                stringBuilder.append("Capital: ");
+                stringBuilder.append(capitalObject.get(0)).append("\n");
+            } else {
+                stringBuilder.append("Capitals: ");
+                for (int i = 0; i < capitalObject.length() - 1; i++) {
+                    stringBuilder.append(capitalObject.get(i).toString()).append(", ");
+                }
+                stringBuilder.append(capitalObject.get(capitalObject.length() - 1).toString()).append("\n");
+            }
+        } catch (Exception e) {
+            stringBuilder.append("No information about capital!").append("\n");
+        }
+    }
+
+    public void fillLanguages(String symbol, JSONObject jsonObject, StringBuilder stringBuilder) {
+        try {
+            JSONObject lanObject = jsonObject.getJSONObject(symbol);
+            int i = 1;
+            for (String ele : lanObject.keySet()) {
+                stringBuilder.append("Language(").append(i++).append("): ").append(lanObject.getString(ele)).append("\n");
+            }
+        } catch (Exception e) {
+            stringBuilder.append("No information about languages!").append("\n");
+        }
     }
 }
